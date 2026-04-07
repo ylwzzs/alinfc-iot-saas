@@ -86,8 +86,12 @@ export interface ExportProgress {
 // ============================================================
 
 const createRequest = (baseURL?: string): AxiosInstance => {
+  // Vercel 部署时 API 和前端同域，不需要额外配置
+  // 本地开发时使用代理或指定 API 地址
+  const apiBaseURL = baseURL || import.meta.env.VITE_API_URL || '';
+
   const request = axios.create({
-    baseURL: baseURL || import.meta.env.VITE_API_URL || '',
+    baseURL: apiBaseURL,
     timeout: 60000,
     headers: { 'Content-Type': 'application/json' },
   });

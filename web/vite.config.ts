@@ -29,15 +29,11 @@ export default defineConfig({
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:3000',
         changeOrigin: true,
       },
-      '/authCallback': {
-        target: process.env.VITE_PROXY_TARGET || 'http://localhost:3000',
-        changeOrigin: true,
-      },
     },
   },
   build: {
     outDir: 'dist',
-    sourcemap: true, // 启用 sourcemap 用于 Sentry
+    sourcemap: true,
     commonjsOptions: {
       transformMixedEsModules: true,
     },
