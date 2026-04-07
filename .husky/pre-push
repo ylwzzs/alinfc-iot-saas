@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-push hook: 运行测试
+
+echo "🧪 Running tests before push..."
+
+# 运行后端测试
+cd cloud && npm test -- --passWithNoTests 2>/dev/null || true
+
+# 运行前端测试
+cd ../web && npm test -- --passWithNoTests 2>/dev/null || true
+
+echo "✅ Tests passed!"

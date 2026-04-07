@@ -1,0 +1,98 @@
+# Dependencies
+node_modules/
+
+# MySQL data directory
+mysql/data/
+
+# Deployed functions
+cloud/functions_deployed/
+
+# Dist directories
+dist/
+cloud/dist/
+web/dist/
+web/dist-root/
+**/node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+**/dist/
+build/
+.next/
+out/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+!**/.env.example
+!**/.env.development
+!**/.env.production
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temp files
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
+
+# TypeScript
+*.tsbuildinfo
+
+# Playwright
+.playwright-cli/
+
+# Backup files
+backups/
+*.sql.gz
+*.backup
+
+# Debug
+.npm
+.eslintcache
+
+# Husky (keep the hooks)
+!.husky/
+
+# Qoder
+.qoder/
+
+# Trae
+.trae/
+
+# Codebuddy
+.codebuddy/

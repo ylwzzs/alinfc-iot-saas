@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-commit hook: 代码检查和格式化
+
+echo "🔍 Running pre-commit checks..."
+
+# 运行 lint-staged
+npx lint-staged
+
+echo "✅ Pre-commit checks passed!"

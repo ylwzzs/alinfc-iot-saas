@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #1677FF;
+  --primary-light: #4096FF;
+  --primary-dark: #0958D9;
+  --bg-dark: #001529;
+  --bg-darker: #000C17;
+  --bg-card: #141414;
+  --bg-surface: #1F1F1F;
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.85);
+  --text-muted: rgba(255, 255, 255, 0.45);
+  --success: #52C41A;
+  --error: #FF4D4F;
+  --warning: #FAAD14;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-darker);
+  color: var(--text-primary);
+}
+
+/* Ant Design 暗色主题覆盖 */
+.ant-layout {
+  background: var(--bg-darker) !important;
+}
+
+.ant-layout-sider {
+  background: var(--bg-dark) !important;
+}
+
+.ant-layout-header {
+  background: var(--bg-dark) !important;
+}
+
+.ant-card {
+  background: var(--bg-card) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+.ant-table {
+  background: var(--bg-card) !important;
+}
+
+.ant-table-thead > tr > th {
+  background: var(--bg-surface) !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: rgba(22, 119, 255, 0.05) !important;
+}
+
+.ant-modal-content {
+  background: var(--bg-card) !important;
+}
+
+.ant-input,
+.ant-select-selector,
+.ant-picker {
+  background: var(--bg-surface) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(22, 119, 255, 0.3);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #4096FF, #1677FF, #0958D9);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Stat card pulse animation */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 15px rgba(22, 119, 255, 0.1); }
+  50% { box-shadow: 0 0 25px rgba(22, 119, 255, 0.2); }
+}
+
+.stat-card-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Fade in animation */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out forwards;
+}

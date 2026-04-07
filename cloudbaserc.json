@@ -1,0 +1,75 @@
+{
+  "envId": "alinfc-1gqk3fty54919e7a",
+  "version": "2.0",
+  "region": "ap-shanghai",
+
+  "framework": {
+    "name": "alinfc-web",
+    "dist": {
+      "root": "./web/dist",
+      "clean": true,
+      "ignore": ["*.ts", "*.tsx", "src/**", "node_modules/**", ".git/**"]
+    }
+  },
+
+  "function": {
+    "handler": "index.main",
+    "timeout": 60,
+    "memorySize": 256,
+    "installDependency": true
+  },
+
+  "functions": [
+    {
+      "name": "gateway",
+      "handler": "index.main",
+      "timeout": 60,
+      "memorySize": 512,
+      "triggers": [
+        {
+          "name": "http-trigger",
+          "type": "http",
+          "config": {
+            "methods": ["GET", "POST", "OPTIONS"],
+            "auth": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "authCallback",
+      "handler": "index.main",
+      "timeout": 30,
+      "memorySize": 256,
+      "triggers": [
+        {
+          "name": "http-trigger",
+          "type": "http",
+          "config": {
+            "methods": ["GET", "POST"],
+            "auth": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "dataSync",
+      "handler": "index.main",
+      "timeout": 300,
+      "memorySize": 1024,
+      "triggers": [
+        {
+          "name": "daily-sync",
+          "type": "timer",
+          "config": "0 2 * * *"
+        }
+      ]
+    },
+    {
+      "name": "initAdmin",
+      "handler": "index.main",
+      "timeout": 30,
+      "memorySize": 256
+    }
+  ]
+}

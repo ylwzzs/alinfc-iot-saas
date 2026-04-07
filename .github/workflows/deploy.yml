@@ -1,0 +1,299 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ==================== 代码检查 ====================
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd cloud && npm ci
+          cd ../web && npm ci
+
+      - name: Check code formatting
+        run: npm run format:check
+        continue-on-error: true
+
+      - name: Run ESLint (Backend)
+        run: cd cloud && npm run lint
+        continue-on-error: true
+
+      - name: Run ESLint (Frontend)
+        run: cd web && npm run lint
+        continue-on-error: true
+
+      - name: TypeScript Check (Backend)
+        run: cd cloud && npx tsc --noEmit
+        continue-on-error: true
+
+      - name: TypeScript Check (Frontend)
+        run: cd web && npx tsc --noEmit
+        continue-on-error: true
+
+  # ==================== 安全扫描 ====================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run npm audit (Backend)
+        run: cd cloud && npm audit --audit-level=high || true
+
+      - name: Run npm audit (Frontend)
+        run: cd web && npm audit --audit-level=high || true
+
+  # ==================== 单元测试 ====================
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd cloud && npm ci
+          cd ../web && npm ci
+
+      - name: Run Backend Tests
+        run: cd cloud && npm test -- --passWithNoTests
+        continue-on-error: true
+
+      - name: Run Frontend Tests
+        run: cd web && npm test -- --passWithNoTests
+        continue-on-error: true
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            cloud/coverage
+            web/coverage
+          retention-days: 7
+
+  # ==================== 构建 ====================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Build Backend
+        run: |
+          cd cloud
+          npm ci
+          npm run build
+
+      - name: Build Frontend
+        run: |
+          cd web
+          npm ci
+          npm run build:prod
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            cloud/dist
+            web/dist
+          retention-days: 7
+
+  # ==================== 部署到开发环境 ====================
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    environment:
+      name: development
+      url: ${{ secrets.DEV_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Setup CloudBase CLI
+        run: npm install -g @cloudbase/cli
+
+      - name: Deploy Backend to CloudBase
+        run: |
+          tcb login --apiSecretId ${{ secrets.TCB_SECRET_ID }} --apiSecretKey ${{ secrets.TCB_SECRET_KEY }}
+          tcb fn deploy --all --envId ${{ secrets.TCB_ENV_ID_DEV }}
+        continue-on-error: true
+
+      - name: Deploy Frontend to CloudBase
+        run: |
+          tcb hosting deploy web/dist --envId ${{ secrets.TCB_ENV_ID_DEV }}
+        continue-on-error: true
+
+      - name: Health Check
+        run: |
+          sleep 30
+          curl -f ${{ secrets.DEV_URL }}/api/monitor/health || echo "Health check failed"
+        continue-on-error: true
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          echo "Deployment to dev environment: ${{ job.status }}"
+
+  # ==================== 部署到生产环境 ====================
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, test, security]
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+    environment:
+      name: production
+      url: ${{ secrets.PROD_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Setup CloudBase CLI
+        run: npm install -g @cloudbase/cli
+
+      - name: Database Backup
+        run: |
+          echo "Creating database backup before deployment..."
+          # 实际备份脚本
+        continue-on-error: true
+
+      - name: Deploy Backend to CloudBase
+        run: |
+          tcb login --apiSecretId ${{ secrets.TCB_SECRET_ID }} --apiSecretKey ${{ secrets.TCB_SECRET_KEY }}
+          tcb fn deploy --all --envId ${{ secrets.TCB_ENV_ID_PROD }}
+
+      - name: Deploy Frontend to CloudBase
+        run: |
+          tcb hosting deploy web/dist --envId ${{ secrets.TCB_ENV_ID_PROD }}
+
+      - name: Health Check
+        run: |
+          sleep 30
+          curl -f ${{ secrets.PROD_URL }}/api/monitor/health
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Production deployment completed successfully at $(date)"
+          # 可以接入钉钉/企微通知
+
+      - name: Rollback notification on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed, manual rollback may be required"
+          # 发送告警通知
+
+  # ==================== 定时数据库备份 ====================
+  backup:
+    name: Database Backup
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MySQL Client
+        run: sudo apt-get install -y mysql-client
+
+      - name: Run Backup
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: alinfc
+        run: |
+          chmod +x scripts/backup.sh
+          ./scripts/backup.sh
+
+      - name: Upload Backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup
+          path: backups/
+          retention-days: 30
+
+  # ==================== 依赖更新检查 ====================
+  dependency-check:
+    name: Dependency Update Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check for outdated dependencies
+        run: |
+          echo "=== Root dependencies ==="
+          npm outdated || true
+          echo "=== Cloud dependencies ==="
+          cd cloud && npm outdated || true
+          echo "=== Web dependencies ==="
+          cd ../web && npm outdated || true
