@@ -1,18 +1,15 @@
 {
-  "version": 2,
-  "name": "alinfc-iot-saas",
   "rewrites": [
     { "source": "/api/health", "destination": "/api/health" },
     { "source": "/api/auth/(.*)", "destination": "/api/auth" },
     { "source": "/api/admin/(.*)", "destination": "/api/admin" },
     { "source": "/api/tenant/(.*)", "destination": "/api/tenant" },
-    { "source": "/(.*)", "destination": "/web/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/**/*.ts": {
-      "runtime": "@vercel/node@3"
+      "memory": 1024,
+      "maxDuration": 10
     }
-  },
-  "buildCommand": "cd web && npm install && npm run build",
-  "outputDirectory": "web/dist"
+  }
 }

@@ -2,6 +2,7 @@
  * Vercel Serverless Function - 健康检查
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { ping } from './db';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = req.headers.origin || '*';
@@ -16,16 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 检查数据库连接
   let dbStatus = 'ok';
   try {
-    const mysql = await import('mysql2/promise');
-    const connection = await mysql.createConnection({
-      host: process.env.DB_HOST!,
-      port: parseInt(process.env.DB_PORT || '3306'),
-      user: process.env.DB_USER!,
-      password: process.env.DB_PASSWORD!,
-      database: process.env.DB_NAME || 'alinfc',
-    });
-    await connection.ping();
-    await connection.end();
+    const ok = await ping();
+    if (!ok) dbStatus = 'error: connection failed';
   } catch (error: any) {
     dbStatus = 'error: ' + error.message;
   }
@@ -35,6 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     environment: process.env.VERCEL_ENV || 'development',
+    database: process.env.POSTGRES_URL ? 'postgres' : 'mysql',
     services: {
       database: dbStatus,
     },

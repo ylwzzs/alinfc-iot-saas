@@ -4,39 +4,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { query, execute } from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
-
-// 数据库配置
-const dbConfig = {
-  host: process.env.DB_HOST!,
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER!,
-  password: process.env.DB_PASSWORD!,
-  database: process.env.DB_NAME || 'alinfc',
-};
-
-async function query<T>(sql: string, params: any[] = []): Promise<T[]> {
-  const mysql = await import('mysql2/promise');
-  const connection = await mysql.createConnection(dbConfig);
-  try {
-    const [rows] = await connection.execute(sql, params);
-    return rows as T[];
-  } finally {
-    await connection.end();
-  }
-}
-
-async function execute(sql: string, params: any[] = []): Promise<void> {
-  const mysql = await import('mysql2/promise');
-  const connection = await mysql.createConnection(dbConfig);
-  try {
-    await connection.execute(sql, params);
-  } finally {
-    await connection.end();
-  }
-}
 
 function setCorsHeaders(res: VercelResponse, req: VercelRequest) {
   const origin = req.headers.origin || '*';
@@ -69,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
       }
 
-      const users = await query<any>('SELECT * FROM admin_users WHERE username = ?', [username]);
+      const users = await query<any>('SELECT * FROM admin_users WHERE username = $1', [username]);
       const user = users[0];
 
       if (!user || !bcrypt.compareSync(password, user.password)) {
@@ -80,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ success: false, message: '账号已被禁用' });
       }
 
-      await execute('UPDATE admin_users SET last_login = NOW() WHERE id = ?', [user.id]);
+      await execute('UPDATE admin_users SET last_login = NOW() WHERE id = $1', [user.id]);
 
       const token = jwt.sign(
         { id: user.id, username: user.username, role: 'admin' },
@@ -102,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: '租户名和密码不能为空' });
       }
 
-      const tenants = await query<any>('SELECT * FROM tenants WHERE name = ?', [tenantName]);
+      const tenants = await query<any>('SELECT * FROM tenants WHERE name = $1', [tenantName]);
       const tenant = tenants[0];
 
       if (!tenant) {

@@ -3,37 +3,9 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import jwt from 'jsonwebtoken';
+import { query, execute } from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
-
-const dbConfig = {
-  host: process.env.DB_HOST!,
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER!,
-  password: process.env.DB_PASSWORD!,
-  database: process.env.DB_NAME || 'alinfc',
-};
-
-async function query<T>(sql: string, params: any[] = []): Promise<T[]> {
-  const mysql = await import('mysql2/promise');
-  const connection = await mysql.createConnection(dbConfig);
-  try {
-    const [rows] = await connection.execute(sql, params);
-    return rows as T[];
-  } finally {
-    await connection.end();
-  }
-}
-
-async function execute(sql: string, params: any[] = []): Promise<void> {
-  const mysql = await import('mysql2/promise');
-  const connection = await mysql.createConnection(dbConfig);
-  try {
-    await connection.execute(sql, params);
-  } finally {
-    await connection.end();
-  }
-}
 
 function setCorsHeaders(res: VercelResponse, req: VercelRequest) {
   const origin = req.headers.origin || '*';
@@ -62,7 +34,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
   try {
-    // 验证登录
     if (!token) {
       return res.status(401).json({ success: false, message: '未登录' });
     }
@@ -74,7 +45,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ success: false, message: '登录已过期' });
     }
 
-    // 验证管理员权限
     if (!isAdmin(user)) {
       return res.status(403).json({ success: false, message: '无权限' });
     }
@@ -86,24 +56,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let sql = 'SELECT id, name, contact_name, contact_phone, authorization_status, status, device_count, created_at, last_sync_at FROM tenants WHERE 1=1';
       const params: any[] = [];
+      let paramIndex = 1;
 
       if (keyword) {
-        sql += ' AND name LIKE ?';
+        sql += ` AND name LIKE $${paramIndex++}`;
         params.push(`%${keyword}%`);
       }
       if (status !== undefined) {
-        sql += ' AND status = ?';
+        sql += ` AND status = $${paramIndex++}`;
         params.push(parseInt(status as string));
       }
       if (authStatus) {
-        sql += ' AND authorization_status = ?';
+        sql += ` AND authorization_status = $${paramIndex++}`;
         params.push(authStatus);
       }
 
-      const countSql = sql.replace('SELECT id, name, contact_name, contact_phone, authorization_status, status, device_count, created_at, last_sync_at', 'SELECT COUNT(*) as total');
-      const countResult = await query<{ total: number }>(countSql, params);
+      const countResult = await query<{ total: number }>(
+        sql.replace('SELECT id, name, contact_name, contact_phone, authorization_status, status, device_count, created_at, last_sync_at', 'SELECT COUNT(*) as total'),
+        params
+      );
 
-      sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+      sql += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
       params.push(parseInt(pageSize as string), offset);
 
       const tenants = await query(sql, params);
@@ -127,14 +100,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: '租户名称不能为空' });
       }
 
-      const existing = await query('SELECT id FROM tenants WHERE name = ?', [name]);
+      const existing = await query('SELECT id FROM tenants WHERE name = $1', [name]);
       if (existing.length > 0) {
         return res.status(409).json({ success: false, message: '租户名称已存在' });
       }
 
       await execute(
-        'INSERT INTO tenants (name, contact_name, contact_phone, status, authorization_status, created_at) VALUES (?, ?, ?, 1, "pending", NOW())',
-        [name, contact_name, contact_phone]
+        'INSERT INTO tenants (name, contact_name, contact_phone, status, authorization_status, created_at) VALUES ($1, $2, $3, 1, $4, NOW())',
+        [name, contact_name, contact_phone, 'pending']
       );
 
       return res.json({ success: true, message: '创建成功' });
@@ -146,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { name, contact_name, contact_phone } = req.body as any;
 
       await execute(
-        'UPDATE tenants SET name = ?, contact_name = ?, contact_phone = ? WHERE id = ?',
+        'UPDATE tenants SET name = $1, contact_name = $2, contact_phone = $3 WHERE id = $4',
         [name, contact_name, contact_phone, id]
       );
 
@@ -158,27 +131,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const id = path.split('/')[4];
       const { status } = req.body as any;
 
-      await execute('UPDATE tenants SET status = ? WHERE id = ?', [status, id]);
+      await execute('UPDATE tenants SET status = $1 WHERE id = $2', [status, id]);
       return res.json({ success: true, message: '状态更新成功' });
     }
 
     // 删除租户
     if (path.match(/^\/api\/admin\/tenants\/\d+$/) && req.method === 'DELETE') {
       const id = path.split('/')[4];
-      await execute('DELETE FROM tenants WHERE id = ?', [id]);
+      await execute('DELETE FROM tenants WHERE id = $1', [id]);
       return res.json({ success: true, message: '删除成功' });
     }
 
     // 获取概览数据
     if (path === '/api/admin/overview' && req.method === 'GET') {
-      const tenantStats = await query<any>('SELECT COUNT(*) as total, SUM(CASE WHEN authorization_status = "authorized" THEN 1 ELSE 0 END) as authorized FROM tenants');
-      const yesterdayStats = await query<any>('SELECT COUNT(*) as device_count FROM devices');
+      const tenantStats = await query<any>(
+        'SELECT COUNT(*) as total, SUM(CASE WHEN authorization_status = $1 THEN 1 ELSE 0 END) as authorized FROM tenants',
+        ['authorized']
+      );
 
       return res.json({
         success: true,
         data: {
           tenantStats: tenantStats[0] || { total: 0, authorized: 0 },
-          deviceCount: yesterdayStats[0]?.device_count || 0,
         },
       });
     }

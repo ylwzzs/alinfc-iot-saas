@@ -2,10 +2,9 @@
  * 登录页面测试
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
-import { message } from 'antd';
 
 // Mock antd message
 vi.mock('antd', async () => {
@@ -30,13 +29,19 @@ vi.mock('../api/request', () => ({
 }));
 
 // 简单的登录表单组件用于测试
-const TestLoginForm = ({ onLogin, loginType = 'admin' }) => {
-  const handleSubmit = (e) => {
+const TestLoginForm = ({
+  onLogin,
+  loginType = 'admin',
+}: {
+  onLogin: (data: { username: string; password: string; loginType: string }) => void;
+  loginType?: 'admin' | 'tenant';
+}) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
+    const formData = new FormData(e.currentTarget);
     onLogin({
-      username: formData.get('username'),
-      password: formData.get('password'),
+      username: formData.get('username') as string,
+      password: formData.get('password') as string,
       loginType,
     });
   };
@@ -56,7 +61,7 @@ const TestLoginForm = ({ onLogin, loginType = 'admin' }) => {
   );
 };
 
-const renderWithRouter = (ui) => {
+const renderWithRouter = (ui: React.ReactElement) => {
   return render(<BrowserRouter>{ui}</BrowserRouter>);
 };
 
@@ -70,10 +75,10 @@ describe('Login Module', () => {
     it('should render admin login form', () => {
       renderWithRouter(<TestLoginForm loginType="admin" onLogin={vi.fn()} />);
 
-      expect(screen.getByTestId('login-form')).toBeInTheDocument();
-      expect(screen.getByTestId('username-input')).toBeInTheDocument();
-      expect(screen.getByTestId('password-input')).toBeInTheDocument();
-      expect(screen.getByTestId('submit-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('login-form')).toBeDefined();
+      expect(screen.getByTestId('username-input')).toBeDefined();
+      expect(screen.getByTestId('password-input')).toBeDefined();
+      expect(screen.getByTestId('submit-btn')).toBeDefined();
     });
 
     it('should submit admin credentials', async () => {
@@ -114,7 +119,7 @@ describe('Login Module', () => {
     it('should render tenant login form', () => {
       renderWithRouter(<TestLoginForm loginType="tenant" onLogin={vi.fn()} />);
 
-      expect(screen.getByTestId('tenantname-input')).toBeInTheDocument();
+      expect(screen.getByTestId('tenantname-input')).toBeDefined();
     });
 
     it('should submit tenant credentials', async () => {
@@ -153,7 +158,6 @@ describe('Login Module', () => {
     });
 
     it('should check token expiration', () => {
-      // Mock expired token (simplified)
       const expiredToken = 'expired-token';
       const isValid = expiredToken !== null && expiredToken !== 'expired-token';
       expect(isValid).toBe(false);

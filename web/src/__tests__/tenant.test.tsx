@@ -2,7 +2,7 @@
  * 租户管理测试
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 
@@ -53,7 +53,15 @@ vi.mock('../api/request', () => ({
 }));
 
 // 简单的租户列表组件用于测试
-const TestTenantList = ({ tenants, onStatusChange, onDelete }) => {
+const TestTenantList = ({
+  tenants,
+  onStatusChange = vi.fn(),
+  onDelete = vi.fn(),
+}: {
+  tenants: typeof mockTenants;
+  onStatusChange?: (id: number, status: number) => void;
+  onDelete?: (id: number) => void;
+}) => {
   return (
     <div data-testid="tenant-list">
       {tenants.map((tenant) => (
@@ -77,7 +85,7 @@ const TestTenantList = ({ tenants, onStatusChange, onDelete }) => {
   );
 };
 
-const renderWithRouter = (ui) => {
+const renderWithRouter = (ui: React.ReactElement) => {
   return render(<BrowserRouter>{ui}</BrowserRouter>);
 };
 
@@ -90,9 +98,9 @@ describe('Tenant Management', () => {
     it('should render tenant list', () => {
       renderWithRouter(<TestTenantList tenants={mockTenants} />);
 
-      expect(screen.getByTestId('tenant-list')).toBeInTheDocument();
-      expect(screen.getByTestId('tenant-1')).toBeInTheDocument();
-      expect(screen.getByTestId('tenant-2')).toBeInTheDocument();
+      expect(screen.getByTestId('tenant-list')).toBeDefined();
+      expect(screen.getByTestId('tenant-1')).toBeDefined();
+      expect(screen.getByTestId('tenant-2')).toBeDefined();
     });
 
     it('should display tenant names correctly', () => {
@@ -210,7 +218,7 @@ describe('Tenant Management', () => {
   });
 
   describe('Authorization Status Display', () => {
-    const statusMap = {
+    const statusMap: Record<string, { text: string; color: string }> = {
       pending: { text: '待授权', color: 'default' },
       authorizing: { text: '授权中', color: 'processing' },
       authorized: { text: '已授权', color: 'success' },

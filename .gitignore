@@ -96,3 +96,5 @@ backups/
 
 # Codebuddy
 .codebuddy/
+.vercel
+.env*.local

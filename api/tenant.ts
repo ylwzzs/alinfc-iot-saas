@@ -3,27 +3,9 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import jwt from 'jsonwebtoken';
+import { query } from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
-
-const dbConfig = {
-  host: process.env.DB_HOST!,
-  port: parseInt(process.env.DB_PORT || '3306'),
-  user: process.env.DB_USER!,
-  password: process.env.DB_PASSWORD!,
-  database: process.env.DB_NAME || 'alinfc',
-};
-
-async function query<T>(sql: string, params: any[] = []): Promise<T[]> {
-  const mysql = await import('mysql2/promise');
-  const connection = await mysql.createConnection(dbConfig);
-  try {
-    const [rows] = await connection.execute(sql, params);
-    return rows as T[];
-  } finally {
-    await connection.end();
-  }
-}
 
 function setCorsHeaders(res: VercelResponse, req: VercelRequest) {
   const origin = req.headers.origin || '*';
@@ -66,7 +48,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 获取租户信息
     if (path === '/api/tenant/info' && req.method === 'GET') {
-      const tenants = await query<any>('SELECT id, name, contact_name, contact_phone, authorization_status, device_count, created_at FROM tenants WHERE id = ?', [tenantId]);
+      const tenants = await query<any>(
+        'SELECT id, name, contact_name, contact_phone, authorization_status, device_count, created_at FROM tenants WHERE id = $1',
+        [tenantId]
+      );
       if (tenants.length === 0) {
         return res.status(404).json({ success: false, message: '租户不存在' });
       }
@@ -75,11 +60,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 获取 Dashboard 数据
     if (path === '/api/tenant/dashboard' && req.method === 'GET') {
-      const days = parseInt((req.query.days as string) || '30');
-
-      // 简化的仪表板数据
       const stats = await query<any>(
-        'SELECT COUNT(*) as total_devices FROM devices WHERE tenant_id = ?',
+        'SELECT COUNT(*) as total_devices FROM devices WHERE tenant_id = $1',
         [tenantId]
       );
 
@@ -93,18 +75,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 获取设备列表
     if (path === '/api/tenant/devices' && req.method === 'GET') {
-      const { page = '1', pageSize = '20', startDate, endDate, sn } = req.query;
+      const { page = '1', pageSize = '20', sn } = req.query;
       const offset = (parseInt(page as string) - 1) * parseInt(pageSize as string);
 
-      let sql = 'SELECT * FROM devices WHERE tenant_id = ?';
+      let sql = 'SELECT * FROM devices WHERE tenant_id = $1';
       const params: any[] = [tenantId];
+      let paramIndex = 2;
 
       if (sn) {
-        sql += ' AND sn LIKE ?';
+        sql += ` AND sn LIKE $${paramIndex++}`;
         params.push(`%${sn}%`);
       }
 
-      sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+      sql += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
       params.push(parseInt(pageSize as string), offset);
 
       const devices = await query(sql, params);
@@ -125,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const limit = parseInt((req.query.limit as string) || '30');
 
       const logs = await query<any>(
-        'SELECT * FROM sync_logs WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ?',
+        'SELECT * FROM sync_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2',
         [tenantId, limit]
       );
 
