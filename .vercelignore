@@ -1,6 +1,5 @@
 node_modules
 .next
-dist
 .env*.local
 .env
 .vercel
@@ -11,3 +10,20 @@ mysql
 scripts
 coverage
 .webpack
+web
+.husky
+.github
+.codebuddy
+.qoder
+.trae
+.playwright-cli
+src
+*.md
+Dockerfile
+docker-compose.yml
+deploy.sh
+cloudbaserc.json
+tsconfig.base.json
+init-db.mjs
+package*.json
+CHANGELOG.md

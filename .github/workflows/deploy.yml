@@ -104,7 +104,7 @@ jobs:
       - name: Health Check
         run: |
           sleep 10
-          curl -f https://alinfc.vercel.app/api/health || echo "Health check warning"
+          curl -f https://alinfc-iot-saas.vercel.app/api/health || echo "Health check warning"
 
   # ==================== 安全扫描 ====================
   security:

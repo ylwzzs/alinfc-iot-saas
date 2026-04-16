@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Cloud functions
+cloud/dist/
+cloud/functions_deployed/
+
+# Scripts (shell scripts with .js extension)
+cloud/scripts/
+
+# Test coverage
+coverage/
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment files
+.env
+.env.*
+
+# Vercel
+.vercel/
+
+# Logs
+*.log

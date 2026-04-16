@@ -1,8 +1,8 @@
 /**
  * 认证模块测试
  */
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import * as jwt from 'jsonwebtoken';
+import * as bcrypt from 'bcryptjs';
 
 // Mock dependencies
 jest.mock('../core/database', () => ({

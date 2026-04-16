@@ -1,15 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/health", "destination": "/api/health" },
-    { "source": "/api/auth/(.*)", "destination": "/api/auth" },
-    { "source": "/api/admin/(.*)", "destination": "/api/admin" },
-    { "source": "/api/tenant/(.*)", "destination": "/api/tenant" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/auth/:path*", "destination": "/api/auth" },
+    { "source": "/api/admin/:path*", "destination": "/api/admin" },
+    { "source": "/api/tenant/:path*", "destination": "/api/tenant" }
   ],
   "functions": {
-    "api/**/*.ts": {
-      "memory": 1024,
-      "maxDuration": 10
+    "api/**/*.js": {
+      "maxDuration": 30
     }
   }
 }
