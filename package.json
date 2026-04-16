@@ -5,52 +5,26 @@
   "description": "支付宝 IoT 设备数据多租户 SaaS 分析平台",
   "scripts": {
     "dev:web": "cd web && npm run dev",
-    "dev:cloud": "cd cloud && npm run local",
     "build:web": "cd web && npm run build",
-    "build:cloud": "cd cloud && npm run build",
     "build": "npm run build:web",
-    "install:all": "npm install && cd web && npm install && cd ../cloud && npm install",
-    "lint": "npm run lint:web && npm run lint:cloud",
-    "lint:web": "cd web && npm run lint",
-    "lint:cloud": "cd cloud && npm run lint",
-    "lint:fix": "npm run lint:web -- --fix && npm run lint:cloud -- --fix",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml}\"",
-    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml}\"",
-    "test": "npm run test:web && npm run test:cloud",
-    "test:web": "cd web && npm test",
-    "test:cloud": "cd cloud && npm test",
-    "test:coverage": "npm run test:web -- --coverage && npm run test:cloud -- --coverage",
-    "prepare": "husky install",
-    "release": "standard-version",
-    "release:minor": "standard-version --release-as minor",
-    "release:major": "standard-version --release-as major",
-    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s"
+    "install:all": "npm install && cd web && npm install",
+    "lint": "cd web && npm run lint",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "test": "cd web && npm test"
   },
   "dependencies": {
-    "@vercel/postgres": "^0.10.0",
+    "@supabase/supabase-js": "^2.49.4",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.9.1"
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.2.2",
-    "@commitlint/config-conventional": "^19.2.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.11.5",
     "@vercel/node": "^3.2.1",
-    "conventional-changelog-cli": "^5.0.0",
-    "husky": "^9.0.11",
-    "lint-staged": "^15.2.2",
+    "dotenv": "^17.4.2",
     "prettier": "^3.2.5",
-    "standard-version": "^9.5.0",
     "typescript": "^5.3.3"
-  },
-  "lint-staged": {
-    "*": "prettier --write --ignore-unknown",
-    "*.{js,jsx,ts,tsx}": [
-      "prettier --write"
-    ]
   },
   "engines": {
     "node": ">=18.0.0"

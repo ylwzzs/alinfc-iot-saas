@@ -1,36 +1,38 @@
 /**
- * Vercel Serverless Function - 健康检查
+ * 健康检查 API
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ping } from './db';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.mytech_SUPABASE_URL;
+const supabaseKey = process.env.mytech_SUPABASE_SERVICE_ROLE_KEY;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const origin = req.headers.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
 
-  // 检查数据库连接
   let dbStatus = 'ok';
   try {
-    const ok = await ping();
-    if (!ok) dbStatus = 'error: connection failed';
-  } catch (error: any) {
-    dbStatus = 'error: ' + error.message;
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { error } = await supabase.from('admin_users').select('id').limit(1);
+      if (error) dbStatus = 'error: ' + error.message;
+    } else {
+      dbStatus = 'error: missing credentials';
+    }
+  } catch (e: any) {
+    dbStatus = 'error: ' + e.message;
   }
 
   res.json({
     success: true,
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    environment: process.env.VERCEL_ENV || 'development',
-    database: process.env.POSTGRES_URL ? 'postgres' : 'mysql',
-    services: {
-      database: dbStatus,
-    },
+    database: 'supabase',
+    dbStatus
   });
 }

@@ -1,37 +1,29 @@
 /**
- * Vercel Serverless Function - 认证相关 API
+ * 认证 API
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { query, execute } from './db';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const supabaseUrl = process.env.mytech_SUPABASE_URL;
+const supabaseKey = process.env.mytech_SUPABASE_SERVICE_ROLE_KEY;
+const JWT_SECRET = process.env.JWT_SECRET || 'default-secret';
 
-function setCorsHeaders(res: VercelResponse, req: VercelRequest) {
-  const origin = req.headers.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+function cors(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCorsHeaders(res, req);
+  cors(res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
 
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
+  const supabase = createClient(supabaseUrl!, supabaseKey!);
   const path = req.url?.split('?')[0] || '';
 
   try {
-    // 健康检查
-    if (path === '/api/health') {
-      return res.json({ success: true, status: 'healthy', timestamp: new Date().toISOString() });
-    }
-
     // 管理员登录
     if (path === '/api/auth/admin/login' && req.method === 'POST') {
       const { username, password } = req.body as any;
@@ -40,10 +32,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: '用户名和密码不能为空' });
       }
 
-      const users = await query<any>('SELECT * FROM admin_users WHERE username = $1', [username]);
-      const user = users[0];
+      const { data: users, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('username', username)
+        .limit(1);
 
-      if (!user || !bcrypt.compareSync(password, user.password)) {
+      if (error || !users?.length) {
+        return res.status(401).json({ success: false, message: '用户名或密码错误' });
+      }
+
+      const user = users[0];
+      if (!bcrypt.compareSync(password, user.password)) {
         return res.status(401).json({ success: false, message: '用户名或密码错误' });
       }
 
@@ -51,17 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ success: false, message: '账号已被禁用' });
       }
 
-      await execute('UPDATE admin_users SET last_login = NOW() WHERE id = $1', [user.id]);
+      await supabase.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: 'admin' },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN as any }
-      );
+      const token = jwt.sign({ id: user.id, username: user.username, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
 
       return res.json({
         success: true,
-        data: { token, user: { id: user.id, username: user.username, realName: user.real_name } },
+        data: { token, user: { id: user.id, username: user.username, realName: user.real_name } }
       });
     }
 
@@ -73,13 +69,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: '租户名和密码不能为空' });
       }
 
-      const tenants = await query<any>('SELECT * FROM tenants WHERE name = $1', [tenantName]);
-      const tenant = tenants[0];
+      const { data: tenants, error } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('name', tenantName)
+        .limit(1);
 
-      if (!tenant) {
+      if (error || !tenants?.length) {
         return res.status(401).json({ success: false, message: '租户不存在' });
       }
 
+      const tenant = tenants[0];
       if (tenant.authorization_status !== 'authorized') {
         return res.status(403).json({ success: false, message: '租户尚未授权' });
       }
@@ -93,15 +93,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(401).json({ success: false, message: '密码错误' });
       }
 
-      const token = jwt.sign(
-        { id: tenant.id, username: tenant.name, role: 'tenant', tenantId: tenant.id },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN as any }
-      );
+      const token = jwt.sign({ id: tenant.id, username: tenant.name, role: 'tenant', tenantId: tenant.id }, JWT_SECRET, { expiresIn: '7d' });
 
       return res.json({
         success: true,
-        data: { token, tenant: { id: tenant.id, name: tenant.name } },
+        data: { token, tenant: { id: tenant.id, name: tenant.name } }
       });
     }
 
@@ -123,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ success: false, message: '接口不存在' });
 
   } catch (error: any) {
-    console.error('API Error:', error);
-    return res.status(500).json({ success: false, message: error.message || '服务器错误' });
+    console.error('Auth Error:', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 }
