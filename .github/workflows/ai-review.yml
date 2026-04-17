@@ -39,28 +39,44 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_AUTHOR="${{ github.event.pull_request.user.login }}"
           BRANCH="${{ github.head_ref }}"
+          CHANGED_FILES="${{ steps.changes.outputs.changed_files }}"
+          ADDITIONS="${{ steps.changes.outputs.additions }}"
+          DELETIONS="${{ steps.changes.outputs.deletions }}"
+
+          # 读取 diff，限制长度
           DIFF=$(cat pr_diff.txt | head -1500)
 
           echo "PR: $PR_TITLE by $PR_AUTHOR"
           echo "Branch: $BRANCH"
-          echo "Changes: ${{ steps.changes.outputs.changed_files }} files"
+          echo "Changes: $CHANGED_FILES files"
 
-          # 调用 GitHub Models API (使用正确的 endpoint)
+          # 使用 jq 构建 JSON 请求体
+          jq -n \
+            --arg model "openai/gpt-4o-mini" \
+            --arg system "你是代码审核专家。分析代码质量、潜在问题、安全风险、测试覆盖、改进建议。用中文简洁回复。" \
+            --arg title "$PR_TITLE" \
+            --arg author "$PR_AUTHOR" \
+            --arg branch "$BRANCH" \
+            --argjson files "$CHANGED_FILES" \
+            --argjson additions "$ADDITIONS" \
+            --argjson deletions "$DELETIONS" \
+            --arg diff "$DIFF" \
+            '{
+              model: $model,
+              messages: [
+                {role: "system", content: $system},
+                {role: "user", content: ("审核PR:\n标题: " + $title + "\n作者: " + $author + "\n分支: " + $branch + "\n变更: " + ($files | tostring) + " 文件, +" + ($additions | tostring) + "/-" + ($deletions | tostring) + " 行\n代码diff:\n" + $diff)}
+              ],
+              temperature: 0.3,
+              max_tokens: 1500
+            }' > request.json
+
           echo "Calling GitHub Models..."
-
           HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json -X POST \
             "https://models.github.ai/inference/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $GH_TOKEN" \
-            -d '{
-              "model": "openai/gpt-4o-mini",
-              "messages": [
-                {"role": "system", "content": "你是代码审核专家。分析代码质量、潜在问题、安全风险、测试覆盖、改进建议。用中文简洁回复。"},
-                {"role": "user", "content": "审核PR:\n标题:'"$PR_TITLE"'\n作者:'"$PR_AUTHOR"'\n分支:'"$BRANCH"'\n变更:'"${{ steps.changes.outputs.changed_files }}"'文件,+'"${{ steps.changes.outputs.additions }}"'/-'"${{ steps.changes.outputs.deletions }}"'行\n代码diff:\n'"$DIFF"'"}
-              ],
-              "temperature": 0.3,
-              "max_tokens": 1500
-            }')
+            -d @request.json)
 
           echo "HTTP Status: $HTTP_CODE"
 
@@ -70,8 +86,7 @@ jobs:
           else
             echo "API Response:"
             cat response.json
-            # 回退到基础审核
-            REVIEW="⚠️ GitHub Models API 不可用 ($HTTP_CODE)。\n\n**基础代码审查**:\n\n✅ 变更统计:\n- 文件数: ${{ steps.changes.outputs.changed_files }}\n- 新增行: ${{ steps.changes.outputs.additions }}\n- 删除行: ${{ steps.changes.outputs.deletions }}\n\n请手动审核代码变更。"
+            REVIEW="⚠️ GitHub Models API 不可用 ($HTTP_CODE)。\n\n**基础代码审查**:\n\n✅ 变更统计:\n- 文件数: $CHANGED_FILES\n- 新增行: $ADDITIONS\n- 删除行: $DELETIONS\n\n请手动审核代码变更。"
           fi
 
           echo "review<<EOF" >> $GITHUB_OUTPUT
