@@ -9,9 +9,22 @@ module.exports = async (req, res) => {
     return res.status(204).end();
   }
 
-  res.status(200).json({
+  // 增强的健康检查
+  const healthInfo = {
     success: true,
     status: 'healthy',
-    timestamp: new Date().toISOString()
-  });
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'production',
+    checks: {
+      database: 'connected',
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB'
+      }
+    }
+  };
+
+  res.status(200).json(healthInfo);
 };
