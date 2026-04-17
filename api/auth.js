@@ -30,8 +30,8 @@ module.exports = async (req, res) => {
       const bcrypt = require('bcryptjs');
       const jwt = require('jsonwebtoken');
 
-      const supabaseUrl = process.env.mytech_SUPABASE_URL;
-      const supabaseKey = process.env.mytech_SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       const JWT_SECRET = process.env.JWT_SECRET || 'alinfc-default-secret-2024';
 
       console.log('Supabase URL:', supabaseUrl ? 'set' : 'missing');
@@ -93,8 +93,8 @@ module.exports = async (req, res) => {
       const { createClient } = require('@supabase/supabase-js');
       const jwt = require('jsonwebtoken');
 
-      const supabaseUrl = process.env.mytech_SUPABASE_URL;
-      const supabaseKey = process.env.mytech_SUPABASE_SERVICE_ROLE_KEY;
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       const JWT_SECRET = process.env.JWT_SECRET || 'alinfc-default-secret-2024';
 
       if (!supabaseUrl || !supabaseKey) {

@@ -29,8 +29,8 @@ module.exports = async (req, res) => {
   const tenantId = user.tenantId || user.id;
   if (!tenantId) return res.status(403).json({ success: false, message: '无租户权限' });
 
-  const supabaseUrl = process.env.mytech_SUPABASE_URL;
-  const supabaseKey = process.env.mytech_SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     return res.status(500).json({ success: false, message: '数据库配置缺失' });
