@@ -124,3 +124,39 @@ jobs:
           npm audit --audit-level=high || true
           cd cloud && npm audit --audit-level=high || true
           cd ../web && npm audit --audit-level=high || true
+
+  # ==================== 企微通知 ====================
+  notify:
+    name: WeWork Notification
+    runs-on: ubuntu-latest
+    needs: [lint, test, deploy-production]
+    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Send WeWork Notification
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            STATUS_EMOJI="✅"
+            STATUS_TEXT="部署成功"
+          else
+            STATUS_EMOJI="❌"
+            STATUS_TEXT="部署失败"
+          fi
+
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_AUTHOR="${{ github.event.head_commit.author.name }}"
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          BRANCH="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+          DEPLOY_URL="https://alinfc.vercel.app"
+
+          curl -s -X POST "${{ secrets.WEWORK_WEBHOOK_URL }}" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "msgtype": "markdown",
+              "markdown": {
+                "content": "'"## ${STATUS_EMOJI} 支付宝 IoT SaaS 部署通知\n\n**状态**: ${STATUS_TEXT}\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG}\n\n[查看构建详情](${RUN_URL})\n[访问应用](${DEPLOY_URL})"'"
+              }
+            }'
