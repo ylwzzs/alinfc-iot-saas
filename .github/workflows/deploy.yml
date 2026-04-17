@@ -280,8 +280,19 @@ jobs:
     name: WeWork Notification
     runs-on: ubuntu-latest
     needs: [lint, test, deploy-production]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
+      - name: Determine Status
+        id: status
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "text=部署成功" >> $GITHUB_OUTPUT
+          else
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "text=部署失败" >> $GITHUB_OUTPUT
+          fi
+
       - name: Send WeWork Notification
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
@@ -292,38 +303,14 @@ jobs:
           REPO="${{ github.repository }}"
           RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
           DEPLOY_URL="https://alinfc.vercel.app"
+          STATUS_EMOJI="${{ steps.status.outputs.emoji }}"
+          STATUS_TEXT="${{ steps.status.outputs.text }}"
 
           curl -s -X POST "${{ secrets.WEWORK_WEBHOOK_URL }}" \
             -H 'Content-Type: application/json' \
             -d '{
               "msgtype": "markdown",
               "markdown": {
-                "content": "'"## ✅ 支付宝 IoT SaaS 生产部署\n\n**状态**: 部署成功\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG}\n\n[查看构建详情](${RUN_URL})\n[访问应用](${DEPLOY_URL})"'"
-              }
-            }'
-
-  # ==================== 部署失败通知 ====================
-  notify-failure:
-    name: WeWork Failure Notification
-    runs-on: ubuntu-latest
-    needs: [lint, test, deploy-production]
-    if: failure() && github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - name: Send Failure Notification
-        run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          COMMIT_AUTHOR="${{ github.event.head_commit.author.name }}"
-          COMMIT_SHA="${{ github.sha }}"
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-          BRANCH="${{ github.ref_name }}"
-          REPO="${{ github.repository }}"
-          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
-
-          curl -s -X POST "${{ secrets.WEWORK_WEBHOOK_URL }}" \
-            -H 'Content-Type: application/json' \
-            -d '{
-              "msgtype": "markdown",
-              "markdown": {
-                "content": "'"## ❌ 支付宝 IoT SaaS 部署失败\n\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG}\n\n请检查构建日志。\n\n[查看构建详情](${RUN_URL})"'"
+                "content": "'"## ${STATUS_EMOJI} 支付宝 IoT SaaS 生产部署\n\n**状态**: ${STATUS_TEXT}\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG}\n\n[查看构建详情](${RUN_URL})\n[访问应用](${DEPLOY_URL})"'"
               }
             }'
