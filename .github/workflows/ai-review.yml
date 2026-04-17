@@ -3,11 +3,11 @@ name: AI Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
-  models: read
 
 jobs:
   ai-review:
@@ -22,12 +22,12 @@ jobs:
         id: changes
         run: |
           # 获取变更的文件列表
-          gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }} > pr_diff.txt
+          gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }} > pr_diff.txt || echo "No diff available" > pr_diff.txt
 
           # 获取变更统计
-          CHANGED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length')
-          ADDITIONS=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions')
-          DELETIONS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions')
+          CHANGED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length' 2>/dev/null || echo "0")
+          ADDITIONS=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions' 2>/dev/null || echo "0")
+          DELETIONS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions' 2>/dev/null || echo "0")
 
           echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
           echo "additions=$ADDITIONS" >> $GITHUB_OUTPUT
@@ -44,7 +44,7 @@ jobs:
           BRANCH="${{ github.head_ref }}"
 
           # 读取代码变更 (限制长度避免超出 token 限制)
-          DIFF=$(cat pr_diff.txt | head -2000)
+          DIFF=$(cat pr_diff.txt 2>/dev/null | head -2000 || echo "No changes")
 
           # 构建 prompt
           SYSTEM_PROMPT='你是一位资深代码审核专家。请审核以下 PR 的代码变更，从以下维度进行分析：
@@ -72,16 +72,14 @@ $DIFF
 
 请给出审核意见。"
 
-          # 获取 GitHub Token
-          TOKEN="${{ github.token }}"
-
-          # 调用 GitHub Models API
-          RESPONSE=$(curl -s -X POST \
-            "https://models.inference.ai.azure.com/chat/completions" \
+          # 调用 GitHub Models API (使用 GPT-4o-mini)
+          echo "Calling GitHub Models API..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://models.github.ai/inference/chat/completions" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $TOKEN" \
+            -H "Authorization: Bearer ${{ github.token }}" \
             -d '{
-              "model": "gpt-4o-mini",
+              "model": "openai/gpt-4o-mini",
               "messages": [
                 {"role": "system", "content": "'"$SYSTEM_PROMPT"'"},
                 {"role": "user", "content": "'"$USER_PROMPT"'"}
@@ -90,8 +88,18 @@ $DIFF
               "max_tokens": 2000
             }')
 
-          # 提取审核结果
-          REVIEW_RESULT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // "审核失败，请检查 API 配置"')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "API call failed with status $HTTP_CODE"
+            echo "Response: $BODY"
+            REVIEW_RESULT="⚠️ AI 审核暂时不可用 (HTTP $HTTP_CODE)。请稍后重试或手动审核代码。"
+          else
+            REVIEW_RESULT=$(echo "$BODY" | jq -r '.choices[0].message.content // "审核失败，请检查 API 配置"')
+          fi
 
           # 保存审核结果
           echo "review_result<<EOF" >> $GITHUB_OUTPUT
@@ -101,26 +109,22 @@ $DIFF
       - name: Post Review Comment
         run: |
           REVIEW="${{ steps.review.outputs.review_result }}"
-          TIME=$(date '+%Y-%m-%d %H:%M:%S UTC')
+          TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
 
           # 构建评论内容
-          cat > comment.md << 'COMMENT_EOF'
+          cat > comment.md << EOF
           ## 🤖 AI 代码审核报告
 
-          **审核时间**: TIME_PLACEHOLDER
+          **审核时间**: $TIME
 
           ---
 
-          REVIEW_PLACEHOLDER
+          $REVIEW
 
           ---
 
           > 📝 此审核由 AI 自动生成，仅供参考。请结合实际情况判断是否合并。
-          COMMENT_EOF
-
-          # 替换占位符
-          sed -i "s/TIME_PLACEHOLDER/$TIME/g" comment.md
-          sed -i "s/REVIEW_PLACEHOLDER/$REVIEW/g" comment.md
+          EOF
 
           # 发布评论
           gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
