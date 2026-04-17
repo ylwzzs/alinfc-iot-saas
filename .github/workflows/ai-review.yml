@@ -3,11 +3,11 @@ name: AI Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
+  models: read
 
 jobs:
   ai-review:
@@ -23,10 +23,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }} > pr_diff.txt || echo "No diff" > pr_diff.txt
-          echo "changed_files=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length' 2>/dev/null || echo 0)" >> $GITHUB_OUTPUT
-          echo "additions=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions' 2>/dev/null || echo 0)" >> $GITHUB_OUTPUT
-          echo "deletions=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions' 2>/dev/null || echo 0)" >> $GITHUB_OUTPUT
+          PR_NUM="${{ github.event.pull_request.number }}"
+          echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
+
+          gh pr diff $PR_NUM --repo ${{ github.repository }} > pr_diff.txt 2>/dev/null || echo "No diff" > pr_diff.txt
+          echo "changed_files=$(gh pr view $PR_NUM --json files --jq '.files | length' 2>/dev/null || echo 0)" >> $GITHUB_OUTPUT
+          echo "additions=$(gh pr view $PR_NUM --json additions --jq '.additions' 2>/dev/null || echo 0)" >> $GITHUB_OUTPUT
+          echo "deletions=$(gh pr view $PR_NUM --json deletions --jq '.deletions' 2>/dev/null || echo 0)" >> $GITHUB_OUTPUT
 
       - name: AI Code Review
         id: review
@@ -38,37 +41,37 @@ jobs:
           BRANCH="${{ github.head_ref }}"
           DIFF=$(cat pr_diff.txt | head -1500)
 
-          # 调用 GitHub Models API
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+          echo "PR: $PR_TITLE by $PR_AUTHOR"
+          echo "Branch: $BRANCH"
+          echo "Changes: ${{ steps.changes.outputs.changed_files }} files"
+
+          # 调用 GitHub Models API (使用正确的 endpoint)
+          echo "Calling GitHub Models..."
+
+          HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json -X POST \
             "https://models.github.ai/inference/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $GH_TOKEN" \
-            -d @- << 'ENDJSON'
-          {
-            "model": "openai/gpt-4o-mini",
-            "messages": [
-              {
-                "role": "system",
-                "content": "你是一位资深代码审核专家。请审核代码变更，分析：1.代码质量 2.潜在问题 3.安全风险 4.测试覆盖 5.改进建议。用中文回复，简洁清晰。"
-              },
-              {
-                "role": "user",
-                "content": "请审核 PR：\n标题: $PR_TITLE\n作者: $PR_AUTHOR\n分支: $BRANCH\n变更: ${{ steps.changes.outputs.changed_files }} 文件, +${{ steps.changes.outputs.additions }}/-${{ steps.changes.outputs.deletions }} 行\n\n代码:\n```\n$DIFF\n```"
-              }
-            ],
-            "temperature": 0.3,
-            "max_tokens": 1500
-          }
-          ENDJSON
-          )
+            -d '{
+              "model": "openai/gpt-4o-mini",
+              "messages": [
+                {"role": "system", "content": "你是代码审核专家。分析代码质量、潜在问题、安全风险、测试覆盖、改进建议。用中文简洁回复。"},
+                {"role": "user", "content": "审核PR:\n标题:'"$PR_TITLE"'\n作者:'"$PR_AUTHOR"'\n分支:'"$BRANCH"'\n变更:'"${{ steps.changes.outputs.changed_files }}"'文件,+'"${{ steps.changes.outputs.additions }}"'/-'"${{ steps.changes.outputs.deletions }}"'行\n代码diff:\n'"$DIFF"'"}
+              ],
+              "temperature": 0.3,
+              "max_tokens": 1500
+            }')
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP Status: $HTTP_CODE"
 
           if [ "$HTTP_CODE" = "200" ]; then
-            REVIEW=$(echo "$BODY" | jq -r '.choices[0].message.content')
+            REVIEW=$(cat response.json | jq -r '.choices[0].message.content')
+            echo "AI Review received successfully"
           else
-            REVIEW="AI审核暂时不可用 (HTTP $HTTP_CODE)，请手动审核。"
+            echo "API Response:"
+            cat response.json
+            # 回退到基础审核
+            REVIEW="⚠️ GitHub Models API 不可用 ($HTTP_CODE)。\n\n**基础代码审查**:\n\n✅ 变更统计:\n- 文件数: ${{ steps.changes.outputs.changed_files }}\n- 新增行: ${{ steps.changes.outputs.additions }}\n- 删除行: ${{ steps.changes.outputs.deletions }}\n\n请手动审核代码变更。"
           fi
 
           echo "review<<EOF" >> $GITHUB_OUTPUT
@@ -79,24 +82,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          PR_NUM="${{ steps.changes.outputs.pr_number }}"
+          REVIEW="${{ steps.review.outputs.review }}"
+
           cat > comment.md << EOF
           ## 🤖 AI 代码审核报告
 
-          **审核时间**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          **审核时间**: $TIME
 
           ---
 
-          ${{ steps.review.outputs.review }}
+          $REVIEW
 
           ---
 
-          > 📝 AI 自动审核，仅供参考。
+          > 📝 AI 自动审核，仅供参考。请结合实际情况判断是否合并。
           EOF
 
-          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
+          gh pr comment $PR_NUM --body-file comment.md
+          echo "Comment posted to PR #$PR_NUM"
 
       - name: Summary
         run: |
           echo "## AI 审核完成 ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- PR: #${{ steps.changes.outputs.pr_number }}" >> $GITHUB_STEP_SUMMARY
           echo "- 变更文件: ${{ steps.changes.outputs.changed_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "- +${{ steps.changes.outputs.additions }}/-${{ steps.changes.outputs.deletions }}" >> $GITHUB_STEP_SUMMARY
+          echo "- +${{ steps.changes.outputs.additions }}/-${{ steps.changes.outputs.deletions }} 行" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "审核意见已发布到 PR 评论" >> $GITHUB_STEP_SUMMARY
