@@ -114,3 +114,12 @@ index.html
 vite.svg
 assets/
 public/
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Playwright
+.playwright/
+playwright-results.json

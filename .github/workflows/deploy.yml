@@ -65,7 +65,51 @@ jobs:
 
       - name: Run Tests
         run: npm run test
+
+      - name: Generate Coverage Report
+        run: cd web && npm run test:coverage
         continue-on-error: true
+
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./web/coverage/lcov.info
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  # ==================== E2E 测试 ====================
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: cd web && npm ci
+
+      - name: Install Playwright Browsers
+        run: cd web && npx playwright install --with-deps chromium
+
+      - name: Run E2E Smoke Tests
+        run: cd web && npm run test:e2e:smoke
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL || 'https://alinfc.vercel.app' }}
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
 
   # ==================== 部署到 Vercel ====================
   deploy-preview:
@@ -129,7 +173,7 @@ jobs:
   notify:
     name: WeWork Notification
     runs-on: ubuntu-latest
-    needs: [lint, test, deploy-production]
+    needs: [lint, test, e2e, deploy-production]
     if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Send WeWork Notification
