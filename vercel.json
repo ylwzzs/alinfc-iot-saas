@@ -1,9 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd web && npm run build",
+  "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/auth/:path*", "destination": "/api/auth" },
     { "source": "/api/admin/:path*", "destination": "/api/admin" },
-    { "source": "/api/tenant/:path*", "destination": "/api/tenant" }
+    { "source": "/api/tenant/:path*", "destination": "/api/tenant" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/**/*.js": {
