@@ -172,13 +172,14 @@ jobs:
           BRANCH="${{ github.head_ref }}"
           REPO="${{ github.repository }}"
           RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+          WIKI_URL="https://rcn1ylkh31jd.feishu.cn/wiki/Q8RwwApZYi2rjmkjKW4cSjOLnNb"
 
           curl -s -X POST "${{ secrets.WEWORK_WEBHOOK_URL }}" \
             -H 'Content-Type: application/json' \
             -d '{
               "msgtype": "markdown",
               "markdown": {
-                "content": "'"## 🔗 支付宝 IoT SaaS 预览环境部署\n\n**PR**: #${PR_NUMBER} ${PR_TITLE}\n**分支**: ${BRANCH}\n**作者**: ${PR_AUTHOR}\n\n**预览地址**: [${PREVIEW_URL}](${PREVIEW_URL})\n\n[查看 PR](${PR_URL})\n[查看构建详情](${RUN_URL})"'"
+                "content": "'"## 🔗 支付宝 IoT SaaS 预览环境部署\n\n**PR**: #${PR_NUMBER} ${PR_TITLE}\n**分支**: ${BRANCH}\n**作者**: ${PR_AUTHOR}\n\n**预览地址**: [${PREVIEW_URL}](${PREVIEW_URL})\n\n[查看 PR](${PR_URL})\n[查看构建详情](${RUN_URL})\n[飞书文档](${WIKI_URL})"'"
               }
             }'
 
@@ -275,9 +276,9 @@ jobs:
           npm audit --audit-level=high || true
           cd web && npm audit --audit-level=high || true
 
-  # ==================== 生产部署企微通知 ====================
+  # ==================== 生产部署通知 + 飞书联动 ====================
   notify:
-    name: WeWork Notification
+    name: WeWork & Feishu Notification
     runs-on: ubuntu-latest
     needs: [lint, test, deploy-production]
     if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -293,6 +294,53 @@ jobs:
             echo "text=部署失败" >> $GITHUB_OUTPUT
           fi
 
+      - name: Get Feishu Token
+        id: feishu
+        if: ${{ secrets.FEISHU_APP_ID != '' && secrets.FEISHU_APP_SECRET != '' }}
+        run: |
+          RESPONSE=$(curl -s -X POST "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal" \
+            -H "Content-Type: application/json" \
+            -d "{\"app_id\":\"${FEISHU_APP_ID}\",\"app_secret\":\"${FEISHU_APP_SECRET}\"}")
+          TOKEN=$(echo "$RESPONSE" | jq -r '.tenant_access_token // empty')
+          if [ -n "$TOKEN" ]; then
+            echo "token=$TOKEN" >> $GITHUB_OUTPUT
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_token=false" >> $GITHUB_OUTPUT
+            echo "Feishu auth failed: $RESPONSE"
+          fi
+        env:
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+
+      - name: Update Feishu Dev Log
+        if: steps.feishu.outputs.has_token == 'true'
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_AUTHOR="${{ github.event.head_commit.author.name }}"
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          BRANCH="${{ github.ref_name }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          STATUS_EMOJI="${{ steps.status.outputs.emoji }}"
+          TEST_RESULT="${{ needs.test.result == 'success' && '✅ 通过' || '❌ 失败' }}"
+          TIMESTAMP=$(date +%s)000
+
+          # 添加开发日志记录
+          curl -s -X POST "https://open.feishu.cn/open-apis/bitable/v1/apps/CHjXbB4Gaa7rYusEGksc6tbBnHd/tables/tbld798dB4hjDTbY/records" \
+            -H "Authorization: Bearer ${{ steps.feishu.outputs.token }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"fields\": {
+                \"日期\": ${TIMESTAMP},
+                \"开发内容\": \"${COMMIT_MSG%%$'\\n'*}\",
+                \"变更文件\": \"待补充\",
+                \"测试结果\": \"${TEST_RESULT}\",
+                \"AI审核结果\": \"⏳ 待审核\",
+                \"备注\": \"提交: ${SHORT_SHA} | 分支: ${BRANCH} | 作者: ${COMMIT_AUTHOR}\"
+              }
+            }" && echo "Feishu dev log updated" || echo "Feishu update skipped"
+
       - name: Send WeWork Notification
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
@@ -305,12 +353,13 @@ jobs:
           DEPLOY_URL="https://alinfc.vercel.app"
           STATUS_EMOJI="${{ steps.status.outputs.emoji }}"
           STATUS_TEXT="${{ steps.status.outputs.text }}"
+          WIKI_URL="https://rcn1ylkh31jd.feishu.cn/wiki/Q8RwwApZYi2rjmkjKW4cSjOLnNb"
 
           curl -s -X POST "${{ secrets.WEWORK_WEBHOOK_URL }}" \
             -H 'Content-Type: application/json' \
             -d '{
               "msgtype": "markdown",
               "markdown": {
-                "content": "'"## ${STATUS_EMOJI} 支付宝 IoT SaaS 生产部署\n\n**状态**: ${STATUS_TEXT}\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG}\n\n[查看构建详情](${RUN_URL})\n[访问应用](${DEPLOY_URL})"'"
+                "content": "'"## ${STATUS_EMOJI} 支付宝 IoT SaaS 生产部署\n\n**状态**: ${STATUS_TEXT}\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG%%$'\\n'*}\n\n[查看构建详情](${RUN_URL})\n[访问应用](${DEPLOY_URL})\n[飞书文档](${WIKI_URL})"'"
               }
             }'
