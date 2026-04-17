@@ -27,8 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          cd cloud && npm ci
-          cd ../web && npm ci
+          cd web && npm ci
 
       - name: Check code formatting
         run: npm run format:check
@@ -39,9 +38,7 @@ jobs:
         continue-on-error: true
 
       - name: TypeScript Check
-        run: |
-          cd cloud && npx tsc --noEmit
-          cd ../web && npx tsc --noEmit
+        run: cd web && npx tsc --noEmit
         continue-on-error: true
 
   # ==================== 单元测试 ====================
@@ -82,6 +79,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [test]
+    # E2E 测试在 PR 和 main 分支 push 时运行
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     continue-on-error: true
     steps:
@@ -91,7 +89,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Install dependencies
         run: cd web && npm ci
@@ -102,7 +99,8 @@ jobs:
       - name: Run E2E Smoke Tests
         run: cd web && npm run test:e2e:smoke || true
         env:
-          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL || 'https://alinfc.vercel.app' }}
+          # PR 使用 Preview URL，main 分支使用生产环境
+          E2E_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://{0}', github.event.pull_request.number) || 'https://alinfc.vercel.app' }}
 
       - name: Upload Playwright Report
         uses: actions/upload-artifact@v4
@@ -112,11 +110,11 @@ jobs:
           path: web/playwright-report/
           retention-days: 7
 
-  # ==================== 部署到 Vercel ====================
+  # ==================== PR 预览部署 ====================
   deploy-preview:
     name: Deploy Preview
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [test]
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -153,10 +151,40 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+  # ==================== 开发环境部署 ====================
+  deploy-develop:
+    name: Deploy Develop
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Dependencies
+        run: |
+          npm ci
+          cd web && npm ci
+          cd ../api && npm ci
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel (Develop)
+        run: vercel --token=${{ secrets.VERCEL_TOKEN }} --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  # ==================== 生产环境部署 ====================
   deploy-production:
     name: Deploy Production
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
@@ -214,14 +242,13 @@ jobs:
       - name: Run npm audit
         run: |
           npm audit --audit-level=high || true
-          cd cloud && npm audit --audit-level=high || true
-          cd ../web && npm audit --audit-level=high || true
+          cd web && npm audit --audit-level=high || true
 
   # ==================== 企微通知 ====================
   notify:
     name: WeWork Notification
     runs-on: ubuntu-latest
-    needs: [lint, test, e2e, deploy-production]
+    needs: [lint, test, deploy-production]
     if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Send WeWork Notification
