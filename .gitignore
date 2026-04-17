@@ -106,7 +106,6 @@ browser-test.spec.ts
 e2e-test.spec.ts
 full-test.spec.ts
 test-api.spec.ts
-playwright.config.ts
 
 # Temp build files
 api-test.html
