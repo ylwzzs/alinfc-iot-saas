@@ -330,20 +330,35 @@ jobs:
           TEST_RESULT="${{ needs.test.result == 'success' && '✅ 通过' || '❌ 失败' }}"
           TIMESTAMP=$(date +%s)000
 
+          # 只取第一行，去除特殊字符
+          COMMIT_MSG_CLEAN=$(echo "$COMMIT_MSG" | head -1 | tr -d '"' | tr -d '\\')
+
+          # 构建请求体
+          REQUEST_BODY=$(cat <<EOFBODY
+          {
+            "fields": {
+              "日期": ${TIMESTAMP},
+              "开发内容": "${COMMIT_MSG_CLEAN}",
+              "变更文件": "待补充",
+              "测试结果": "${TEST_RESULT}",
+              "AI审核结果": "⏳ 待审核",
+              "备注": "提交: ${SHORT_SHA} | 分支: ${BRANCH} | 作者: ${COMMIT_AUTHOR}"
+            }
+          }
+          EOFBODY
+          )
+
           # 添加开发日志记录
-          curl -s -X POST "https://open.feishu.cn/open-apis/bitable/v1/apps/CHjXbB4Gaa7rYusEGksc6tbBnHd/tables/tbld798dB4hjDTbY/records" \
+          RESPONSE=$(curl -s -X POST "https://open.feishu.cn/open-apis/bitable/v1/apps/CHjXbB4Gaa7rYusEGksc6tbBnHd/tables/tbld798dB4hjDTbY/records" \
             -H "Authorization: Bearer ${{ steps.feishu.outputs.token }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"fields\": {
-                \"日期\": ${TIMESTAMP},
-                \"开发内容\": \"${COMMIT_MSG%%$'\\n'*}\",
-                \"变更文件\": \"待补充\",
-                \"测试结果\": \"${TEST_RESULT}\",
-                \"AI审核结果\": \"⏳ 待审核\",
-                \"备注\": \"提交: ${SHORT_SHA} | 分支: ${BRANCH} | 作者: ${COMMIT_AUTHOR}\"
-              }
-            }" && echo "Feishu dev log updated" || echo "Feishu update skipped"
+            -d "$REQUEST_BODY")
+
+          if echo "$RESPONSE" | jq -e '.code == 0' > /dev/null 2>&1; then
+            echo "Feishu dev log updated successfully"
+          else
+            echo "Feishu dev log update failed: $RESPONSE"
+          fi
 
       - name: Send WeWork Notification
         run: |
