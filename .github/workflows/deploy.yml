@@ -296,8 +296,12 @@ jobs:
 
       - name: Get Feishu Token
         id: feishu
-        if: ${{ secrets.FEISHU_APP_ID != '' && secrets.FEISHU_APP_SECRET != '' }}
         run: |
+          if [ -z "${FEISHU_APP_ID}" ] || [ -z "${FEISHU_APP_SECRET}" ]; then
+            echo "has_token=false" >> $GITHUB_OUTPUT
+            echo "Feishu secrets not configured"
+            exit 0
+          fi
           RESPONSE=$(curl -s -X POST "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal" \
             -H "Content-Type: application/json" \
             -d "{\"app_id\":\"${FEISHU_APP_ID}\",\"app_secret\":\"${FEISHU_APP_SECRET}\"}")
@@ -363,4 +367,3 @@ jobs:
                 "content": "'"## ${STATUS_EMOJI} 支付宝 IoT SaaS 生产部署\n\n**状态**: ${STATUS_TEXT}\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG%%$'\\n'*}\n\n[查看构建详情](${RUN_URL})\n[访问应用](${DEPLOY_URL})\n[飞书文档](${WIKI_URL})"'"
               }
             }'
-
