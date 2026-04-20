@@ -363,3 +363,4 @@ jobs:
                 "content": "'"## ${STATUS_EMOJI} 支付宝 IoT SaaS 生产部署\n\n**状态**: ${STATUS_TEXT}\n**分支**: ${BRANCH}\n**提交**: ${SHORT_SHA}\n**作者**: ${COMMIT_AUTHOR}\n**信息**: ${COMMIT_MSG%%$'\\n'*}\n\n[查看构建详情](${RUN_URL})\n[访问应用](${DEPLOY_URL})\n[飞书文档](${WIKI_URL})"'"
               }
             }'
+
