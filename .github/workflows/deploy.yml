@@ -337,9 +337,8 @@ jobs:
           REQUEST_BODY=$(cat <<EOFBODY
           {
             "fields": {
-              "日期": ${TIMESTAMP},
               "开发内容": "${COMMIT_MSG_CLEAN}",
-              "变更文件": "待补充",
+              "日期": ${TIMESTAMP},
               "测试结果": "${TEST_RESULT}",
               "AI审核结果": "⏳ 待审核",
               "备注": "提交: ${SHORT_SHA} | 分支: ${BRANCH} | 作者: ${COMMIT_AUTHOR}"
